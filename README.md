@@ -5,179 +5,131 @@ ql-docker-plus.py  这个能看到款额
 青龙面板使用
 
 注意：如果是docker容器创建的青龙，请使用whyour/qinglong:debian镜像，latest（alpine）版本可能无法安装部分依赖
+# ClawCloud 自动保活脚本 (Selenium ARM64 版)
+
+专为 **青龙面板 (Docker ARM64/AMD64)** 环境设计的 ClawCloud 自动登录保活脚本。
+
+## ✨ 核心功能
+
+*   **多账号支持**：支持配置无限个账号，顺序执行保活。
+*   **Cookie 复用**：优先使用本地缓存 Cookie，减少登录频率，降低风控风险。
+*   **自动 2FA 验证**：
+    *   **强制密钥模式**：支持 TOTP (Authenticator) 两步验证，需配置 `totp_secret` 密钥，实现全自动无人值守登录。
+    *   注：为保证稳定性，已移除交互式验证功能。
+*   **多渠道通知**：
+    *   **Telegram**: 支持发送文本汇总和异常截图。
+    *   **微信**: 支持自定义 API (如 wxpush) 推送通知。
+*   **智能代理 (国内环境优化)**：
+    *   自动检测 `CLAW_PROXY` 或 `HTTP_PROXY` 环境变量。
+    *   检测到代理时，自动配置浏览器和网络请求走代理，并自动处理 Docker 容器内的 `localhost` 连接问题，确保国内网络下稳定运行。
+*   **环境适配**：针对 ARM64 (树莓派/M1) 和 AMD64 环境下的 Chromium/Chrome 路径进行了自动适配。
+
+## 🛠️ 环境要求
+
+*   **环境**: 青龙面板 (推荐 v2.10+)
+*   **依赖**:
+    *   Python 3.8+
+    *   Chromium / Chrome 浏览器
+    *   ChromeDriver
+*   **Python 库** (青龙面板依赖管理 -> Python 中添加):
+    ```logo
+    selenium
+    requests
+    loguru
+    pyotp
+    ```
+*   **系统包** (青龙面板依赖管理 -> Linux 中添加):
+    ```bash
+    chromium
+    chromium-chromedriver
+    ```
+    *(注：部分镜像可能直接集成了 chrome，视具体环境而定)*
+
+### 💻 SSH 手动安装依赖 (推荐)
+
+如果您熟悉 SSH，可以直接进入容器安装，速度更快且更稳定。
+
+1.  **进入青龙容器**
+    ```bash
+    docker exec -it qinglong bash
+    # 注意: 'qinglong' 是您的容器名，如果不确定请使用 docker ps 查看
+    ```
+
+2.  **安装 Linux 系统依赖 (Alpine 环境)**
+    ```bash
+    apk add chromium chromium-chromedriver
+    ```
+    *(如果是 Debian/Ubuntu 环境，请使用 `apt-get install chromium-driver`)*
+
+3.  **安装 Python 依赖**
+    ```bash
+    pip3 install selenium requests loguru pyotp
+    ```
+
+## ⚙️ 环境变量配置
+
+请在青龙面板的「环境变量」中添加以下配置：
+
+### 1. 账号配置 (必须)
+
+| 变量名 | 描述 | 格式 |
+| :--- | :--- | :--- |
+| `CLAW_ACCOUNTS` | 账号列表 | `账号----密码----2FA密钥` |
+
+*   **多账号**：用 `&` 符号连接。
+*   **备注支持**：支持在账号后加 `#备注`，脚本会自动忽略。
+
+**示例**：
+```bash
+# 单账号
+user@gmail.com----password123----JBSWY3DPEHPK3PXP
+
+# 多账号 (带备注)
+user1@gmail.com#主号----pass1----SECRET1&user2@qq.com#小号----pass2----SECRET2
+```
+
+### 2. 代理配置 (国内用户推荐)
+
+| 变量名 | 描述 | 示例 |
+| :--- | :--- | :--- |
+| `CLAW_PROXY` | 代理地址 | `http://192.168.1.5:7890` |
+| `HTTP_PROXY` | 系统代理 (备选) | `http://192.168.1.5:7890` |
+
+*   **作用**：启用后，浏览器登录 GitHub/ClawCloud 以及发送 Telegram 消息都会走此代理。
+*   **无需配置**：如果你是国外 VPS，可不填。
+
+### 3. 通知配置 (可选)
+
+| 变量名 | 描述 | 说明 |
+| :--- | :--- | :--- |
+| `TG_BOT_TOKEN` | Telegram Bot Token | 机器人 Token |
+| `TG_CHAT_ID` | Telegram Chat ID | 接收消息的用户 ID |
+| `WECHAT_API_URL` | 微信推送 API | 自定义 GET/POST 接口地址 |
+| `WECHAT_AUTH_TOKEN` | 微信推送 Token | 接口鉴权 Token |
 
-依赖安装
+## 🚀 运行说明
 
-安装Python依赖
+1.  将脚本 `clawcloud_arm64.py` 添加到青龙面板的脚本库或直接上传。
+2.  添加定时任务：
+    *   命令：`task clawcloud_arm64.py`
+    *   定时：`0 10 * * *` (建议每天运行一次，避开高峰期)
+3.  点击运行日志，查看执行情况。
 
-进入青龙面板 -> 依赖管理 -> 安装依赖
+## 📂 文件结构
 
-依赖类型选择python3
+*   `clawcloud_arm64.py`: 主脚本文件
+*   `cookies_xxx.json`: 脚本自动生成的 Cookie 缓存文件 (自动生成，无需管理)
+*   `*.png`: 运行过程中生成的临时截图 (脚本运行结束会自动清理)
 
-自动拆分选择是
-``
-selenium
-pyotp
-requests
-loguru
-``
+## ⚠️ 常见问题
 
-点击确定
+1.  **报错 `Network unreachable`**
+    *   请检查是否配置了 `CLAW_PROXY`。国内网络直连 Google/GitHub/Telegram 通常不通。
+2.  **报错 `WebDriverException: Session not created`**
+    *   通常是 Chrome 和 ChromeDriver 版本不匹配，或未安装 Chromium。请检查青龙面板的 Linux 依赖是否安装了 `chromium` 和 `chromium-chromedriver`。
+3.  **2FA 登录失败**
+    *   请确保 `totp_secret` 是正确的 Base32 密钥字符串（通常是添加 Authenticator 时显示的密钥）。不要填 6 位动态码。
 
-安装 linux chromium 依赖
-
-青龙面板 -> 依赖管理 -> 安装Linux依赖
-
-名称填 chromium
-
-若安装失败，可能需要执行apt update更新索引（若使用docker则需进入docker容器执行）
-
-添加仓库
-
-进入青龙面板 -> 订阅管理 -> 创建订阅
-
-依次在对应的字段填入内容（未提及的不填）：
-
-名称：clawcloud 登陆
-
-类型：公开仓库
-
-链接：https://github.com/djkyc/clawcloud-auto-login.git
-
-分支：main
-
-定时类型：crontab
-
-定时规则(拉取上游代码的时间，每六小时一次，可以自由调整频率): 0 */6 * * *
-
-配置环境变量
-
-进入青龙面板 -> 环境变量 -> 创建变量
-
-环境变量配置完成!
-
-🎯 配置方式
-
-在青龙面板的环境变量中添加:
-
-变量名	值	说明  
-
-CLAW_ACCOUNTS	账号1----密码1----2FA密钥1&账号2----密码2----2FA密钥2	多账号配置
-
-TG_BOT_TOKEN	your_token	Telegram Bot Token
-
-TG_CHAT_ID	your_chat_id	Telegram Chat ID
-
-CLAW_CLOUD_URL	https://eu-central-1.run.claw.cloud	可选,默认欧洲区
-
-📝 配置格式
-
-CLAW_ACCOUNTS=user1@gmail.com----pass123----SECRET1&user2@gmail.com----pass456----SECRET2
-
-格式说明:
-
-每个账号: 用户名----密码----2FA密钥(可选)
-
-多个账号用 & 分隔
-
-2FA 密钥可以留空
-
-🎯 配置示例
-
-2个账号,都有 2FA:
-
-user1@gmail.com----password123----JBSWY3DPEHPK3PXP&user2@gmail.com----password456----ABCDEFGHIJKLMNOP
-
-2个账号,只有第1个有 2FA:
-
-user1@gmail.com----password123----JBSWY3DPEHPK3PXP&user2@gmail.com----password456
-
-3个账号,都没有 2FA:
-
-user1@gmail.com----password123&user2@gmail.com----password456&user3@gmail.com----password789
-
-🔧 青龙面板操作步骤
-
-进入青龙面板 → 环境变量
-
-点击 添加变量
-
-名称: CLAW_ACCOUNTS
-
-值: 按格式填写
-
-点击 确定
-✅ 优点
-✅ 密码不在脚本中明文存储
-✅ 便于管理和修改
-✅ 支持任意数量账号
-✅ 安全性更高
-📊 预期日志
-从环境变量 CLAW_ACCOUNTS 加载账号配置
-加载账号: user1@gmail.com
-加载账号: user2@gmail.com
-📊 共配置 2 个账号
-详细配置指南请查看文档 👇
-手动拉取脚本
-
-首次添加仓库后不会立即拉取脚本，需要等待到定时任务触发，当然可以手动触发拉取
-点击右侧"运行"按钮可手动执行
-运行结果
-青龙面板中查看
-进入青龙面板 -> 定时任务 -> 找到 签到 -> 点击右侧的日志
-
-方法 1: 在青龙面板中安装(推荐)  
-
-进入青龙面板
-
-点击 依赖管理
-
-选择 Python3 标签
-
-在输入框中输入: pyotp
-
-点击 安装
-
-方法 2: SSH 进入容器安装
-
-
-# SSH 连接到服务器
-ssh root@你的服务器IP
-
-# 进入青龙容器
-docker exec -it qinglong bash
-
-# 安装 pyotp
-pip3 install pyotp
-
-# 退出容器
-exit
-
- 
- 一次性安装所有依赖
- 
-在青龙面板的 依赖管理 → Python3 中,依次安装:
-
-selenium
-pyotp
-requests
-loguru
-
-🎯 青龙面板定时任务设置
-
-进入青龙面板 → 定时任务
-
-点击 添加任务
-
-填写:
-
-名称: ClawCloud 自动登录
-
-命令: task clawcloudrunifo.py
-
-定时规则: 30 8 * * * (每天 8:30)
-
-或者: 0 */6 * * * (每 6 小时)
 
 点击 确定
 <img width="527" height="447" alt="image" src="https://github.com/user-attachments/assets/b429dc14-8097-4a3e-aa14-0fe1f365cbc7" />
